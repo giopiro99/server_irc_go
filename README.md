@@ -27,7 +27,6 @@ All state management and client broadcasting are handled by a single, isolated B
    cd <repository-name>
 
     Set up the environment variables by copying the example file:
-    Bash
 
     cp .env.example .env
 
@@ -43,8 +42,6 @@ Usage
 Once the server is running, you can connect to it using multiple terminal windows via Netcat.
 
 Connect a client:
-Bash
-
 nc 127.0.0.1 8190
 
     Insert the server password defined in the .env file.
