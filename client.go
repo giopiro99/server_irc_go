@@ -2,7 +2,6 @@ package main
 
 import (
 	"bufio"
-	"log"
 	"net"
 	"strings"
 	"unicode/utf8"
@@ -24,7 +23,7 @@ func nickNameInit(client *Client) (bool, error) {
 
 	client.nickName = strings.TrimSpace(text)
 	if client.nickName == "" || utf8.RuneCountInString(client.nickName) > 9 {
-		client.conn.Write([]byte("Please, insert a valid nickName beetwen 1 characher and 9"))
+		client.conn.Write([]byte("Please, insert a valid nickName beetwen 1 characher and 9\n"))
 		return false, nil
 	}
 
@@ -37,6 +36,8 @@ func insertPassword(client *Client) (bool, error) {
 	if err != nil {
 		return false, err
 	}
+
+	text = strings.TrimSpace(text)
 	if text != client.server.password {
 		return false, nil
 	}
@@ -85,7 +86,6 @@ func handleConnection(conn net.Conn, server *Server) {
 	client.conn.Write([]byte("insert server password for access\n"))
 	isAuth, err := doAuthentication(client)
 	if err != nil || isAuth != true {
-		log.Println("The client is disconnected, closing this connection")
 		return
 	}
 
@@ -93,7 +93,6 @@ func handleConnection(conn net.Conn, server *Server) {
 	for {
 		var ok, err = nickNameInit(client)
 		if err != nil {
-			log.Println("The client is disconnected, closing this connection")
 			return
 		}
 		if ok != true {
@@ -109,7 +108,6 @@ func handleConnection(conn net.Conn, server *Server) {
 		text, err := client.reader.ReadString('\n')
 		if err != nil {
 			server.unregistered <- client
-			log.Println("The client is disconnected, closing this connection")
 			return
 		}
 
@@ -121,4 +119,5 @@ func handleConnection(conn net.Conn, server *Server) {
 			}
 		}
 	}
+
 }

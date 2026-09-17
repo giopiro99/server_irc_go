@@ -5,6 +5,8 @@ import (
 	"log"
 	"net"
 	"os"
+
+	"github.com/joho/godotenv"
 )
 
 type Message struct {
@@ -21,6 +23,9 @@ type Server struct {
 	clients      map[*Client]bool
 	registered   chan *Client
 	unregistered chan *Client
+	
+	shutDown		chan bool
+	done			chan {struct}
 }
 
 func newServer() (*Server, error) {
@@ -46,11 +51,18 @@ func newServer() (*Server, error) {
 	server.clients = make(map[*Client]bool)
 	server.registered = make(chan *Client)
 	server.unregistered = make(chan *Client)
+	server.shutDown = make(chan bool)
 
 	return server, nil
 }
 
 func main() {
+
+	err := godotenv.Load()
+	if err != nil {
+		log.Println("No file .env, exit")
+		return
+	}
 
 	server, err := newServer()
 	if err != nil {
@@ -67,14 +79,17 @@ func main() {
 
 	defer listener.Close()
 
+	go shutdownSignal(server)
+	go runBroadCaster(server)
+
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
 			log.Println("Error in accepting conn: ", err)
-			continue
+			break
 		}
 
-		go runBroadCaster(server)
 		go handleConnection(conn, server)
 	}
+
 }
