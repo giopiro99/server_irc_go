@@ -33,9 +33,11 @@ All state management and client broadcasting are handled by a single, isolated B
     (You can edit the .env file to change the default IP, PORT, or PASSWORD).
 
     Run the server:
-    Bash
+   ❯ go run .
 
-    go run .
+   If you want to check for data races or similar issues, use:
+   ❯ go run -race .
+
 
 Usage
 
