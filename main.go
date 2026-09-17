@@ -14,6 +14,11 @@ type Message struct {
 	message string
 }
 
+type NickRequest struct {
+	nickName string
+	resultCh chan bool
+}
+
 type Server struct {
 	ipAddress string
 	port      string
@@ -23,9 +28,9 @@ type Server struct {
 	clients      map[*Client]bool
 	registered   chan *Client
 	unregistered chan *Client
-	
-	shutDown		chan bool
-	done			chan {struct}
+
+	shutDown  chan bool
+	nickCheck chan NickRequest
 }
 
 func newServer() (*Server, error) {
@@ -52,7 +57,7 @@ func newServer() (*Server, error) {
 	server.registered = make(chan *Client)
 	server.unregistered = make(chan *Client)
 	server.shutDown = make(chan bool)
-
+	server.nickCheck = make(chan NickRequest)
 	return server, nil
 }
 
@@ -74,21 +79,20 @@ func main() {
 	connection := net.JoinHostPort(server.ipAddress, server.port)
 	listener, err := net.Listen("tcp", connection)
 	if err != nil {
-		log.Fatal("error to make listen the socket")
+		log.Fatalf("error: %v", err)
 	}
 
 	defer listener.Close()
 
-	go shutdownSignal(server)
+	go shutdownSignal(server, listener)
 	go runBroadCaster(server)
 
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
-			log.Println("Error in accepting conn: ", err)
+			log.Println("Error: ", err)
 			break
 		}
-
 		go handleConnection(conn, server)
 	}
 

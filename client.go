@@ -27,6 +27,14 @@ func nickNameInit(client *Client) (bool, error) {
 		return false, nil
 	}
 
+	reply := make(chan bool)
+
+	client.server.nickCheck <- NickRequest{nickName: client.nickName, resultCh: reply}
+	if <-reply == true {
+		client.conn.Write([]byte("This name has already been taken, retry with different one.\n"))
+		return false, nil
+	}
+
 	return true, nil
 }
 

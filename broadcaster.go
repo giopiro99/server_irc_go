@@ -13,7 +13,13 @@ func runBroadCaster(server *Server) {
 
 		case client := <-server.unregistered:
 			if server.clients[client] {
-				log.Println("The client is disconnected, closing this connection")
+				finalMessage := client.nickName + " is leaving the server...bye\n"
+				for currentClient := range server.clients {
+					if client == currentClient {
+						continue
+					}
+					currentClient.conn.Write([]byte(finalMessage))
+				}
 				delete(server.clients, client)
 			}
 
@@ -36,6 +42,15 @@ func runBroadCaster(server *Server) {
 				}
 				return
 			}
+		case req := <-server.nickCheck:
+			var nameExists bool = false
+			for client := range server.clients {
+				if client.nickName == req.nickName {
+					nameExists = true
+					break
+				}
+			}
+			req.resultCh <- nameExists
 		}
 	}
 }
