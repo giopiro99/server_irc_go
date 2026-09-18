@@ -14,6 +14,12 @@ type Client struct {
 	server   *Server
 }
 
+func initClient(client *Client, server *Server, conn net.Conn) {
+	client.server = server
+	client.conn = conn
+	client.reader = bufio.NewReader(client.conn)
+}
+
 func nickNameInit(client *Client) (bool, error) {
 	text, err := client.reader.ReadString('\n')
 	text = strings.TrimSpace(text)
@@ -79,10 +85,39 @@ func doAuthentication(client *Client) (bool, error) {
 	return true, nil
 }
 
-func initClient(client *Client, server *Server, conn net.Conn) {
-	client.server = server
-	client.conn = conn
-	client.reader = bufio.NewReader(client.conn)
+func clientRoutine(client *Client, server *Server) {
+	text, err := client.reader.ReadString('\n')
+	if err != nil {
+		server.unregistered <- client
+		return
+	}
+	text = strings.TrimSpace(text)
+	command := parseCommand(text)
+	//println("commande name = " + command.name + "\n" + "target = " + command.target + "\n" + "payload = " + command.payload + "\n")
+	if text != "" {
+		switch command.name {
+		case "BROADCAST":
+			server.messageCh <- &Message{
+				sender:  client,
+				target:  "",
+				message: command.payload,
+			}
+		case "QUIT":
+			server.unregistered <- client
+			return
+		case "PRIVMSG":
+			server.messageCh <- &Message{
+				sender:  client,
+				target:  command.target,
+				message: command.payload,
+			}
+		case "JOIN":
+			server.joinCh <- &JoinReq{
+				roomName: command.target,
+				client:   client,
+			}
+		}
+	}
 }
 
 func handleConnection(conn net.Conn, server *Server) {
@@ -112,35 +147,7 @@ func handleConnection(conn net.Conn, server *Server) {
 	server.registered <- client
 
 	for {
-
-		text, err := client.reader.ReadString('\n')
-		if err != nil {
-			server.unregistered <- client
-			return
-		}
-		text = strings.TrimSpace(text)
-
-		command := parseCommand(text)
-		if text != "" {
-			switch command.name {
-			case "BROADCAST":
-				server.messageCh <- &Message{
-					sender:  client,
-					target:  "",
-					message: command.payload,
-				}
-			case "QUIT":
-				server.unregistered <- client
-				return
-
-			case "PRIVMSG":
-				server.messageCh <- &Message{
-					sender: client,
-					target: command.target,
-					message: command.payload,
-				}
-			}
-		}
+		clientRoutine(client, server)
 	}
 
 }

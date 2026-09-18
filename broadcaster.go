@@ -1,6 +1,10 @@
 package main
 
-import "log"
+import (
+	"log"
+	"strings"
+	"unicode/utf8"
+)
 
 func sendBroadCast(server *Server, messageTx *Message) {
 	for client := range server.clients {
@@ -25,15 +29,59 @@ func sendPrivMsg(server *Server, messageTx *Message) {
 	}
 }
 
+func sendToChannel(server *Server, messageTx *Message) {
+
+	channelName := strings.TrimPrefix(messageTx.target, "#")
+	//println("messaggio da inviare al canale " + channelName + "\n" + "testo: " + messageTx.message)
+
+	channel := server.rooms[channelName]
+	if channel == nil {
+		messageTx.sender.conn.Write([]byte("Channel not found, veryfi channel name\n"))
+		return
+	}
+
+	if !channel.clients[messageTx.sender] {
+		messageTx.sender.conn.Write([]byte("You are not channel member! Please join the channel before sending message!\n"))
+		return
+	}
+
+	finalMessage := channelName + ": " + messageTx.sender.nickName + ": " + messageTx.message + "\n"
+	for currentClient := range channel.clients {
+		if currentClient.nickName == messageTx.sender.nickName {
+			continue
+		}
+		currentClient.conn.Write([]byte(finalMessage))
+	}
+}
+
 func addClient(client *Client, server *Server) {
 	log.Println("New client arrived!")
 	client.conn.Write([]byte("Welcome to the go irc server made by Giovanni Pirozzi!\n"))
 	server.clients[client] = true
 }
 
+func removeClientFromChannels(client *Client, server *Server) {
+	for channelName, channel := range server.rooms {
+		if channel.clients[client] {
+			sendToChannel(server, &Message{
+				sender:  client,
+				target:  channelName,
+				message: "left the channel",
+			})
+			delete(channel.clients, client)
+		}
+
+		if len(channel.clients) == 0 {
+			delete(server.rooms, channelName)
+			println("Channel " + channelName + " is empty, eliminated...")
+		}
+	}
+}
+
 func removeClient(client *Client, server *Server) {
 	log.Println("Client is leaving!")
 	finalMessage := client.nickName + " is leaving the server...bye\n"
+	removeClientFromChannels(client, server)
 	for currentClient := range server.clients {
 		if client == currentClient {
 			continue
@@ -46,6 +94,7 @@ func removeClient(client *Client, server *Server) {
 func removeAllClients(server *Server) {
 	for client := range server.clients {
 		if server.clients[client] {
+			removeClientFromChannels(client, server)
 			client.conn.Write([]byte("Error: Server is in shutdown, disconnecting..\n"))
 			delete(server.clients, client)
 			client.conn.Close()
@@ -62,29 +111,83 @@ func checkNickName(server *Server, req NickRequest) bool {
 	return false
 }
 
+func createChannel(server *Server, joinReq *JoinReq) {
+	newRoom := &Room{
+		name:    joinReq.roomName,
+		clients: make(map[*Client]bool),
+	}
+	newRoom.clients[joinReq.client] = true
+	server.rooms[joinReq.roomName] = newRoom
+	println("New room created, named: ", joinReq.roomName)
+	welcomeMessage := "You are the first member of this channel named " + newRoom.name + "!\nWelcome " + joinReq.client.nickName + "\n"
+	joinReq.client.conn.Write([]byte(welcomeMessage))
+}
+
+func handleJoinChannel(server *Server, joinReq *JoinReq) {
+
+	trimmedName := strings.TrimSpace(joinReq.roomName)
+	println(joinReq.roomName)
+	client := joinReq.client
+
+	if trimmedName == "" || utf8.RuneCountInString(trimmedName) > 10 {
+		client.conn.Write([]byte("Invalid channel name, min 1 character max 10\n"))
+		return
+	}
+
+	channel := server.rooms[joinReq.roomName]
+
+	if channel == nil {
+		if strings.Contains(trimmedName, "#") {
+			client.conn.Write([]byte("Invalid channel name, contains #\n"))
+			return
+		}
+		createChannel(server, joinReq)
+		return
+	}
+
+	channel.clients[client] = true
+	finalMessage := "Welcome in the channel " + channel.name + "\n"
+	client.conn.Write([]byte(finalMessage))
+	sendToChannel(server, &Message{
+		sender:  client,
+		target:  channel.name,
+		message: "is joined\n",
+	})
+}
+
 func runBroadCaster(server *Server) {
 
 	for {
 		select {
+
 		case client := <-server.registered:
 			addClient(client, server)
+
 		case client := <-server.unregistered:
 			if server.clients[client] {
 				removeClient(client, server)
 			}
+
 		case messageTx := <-server.messageCh:
 			if messageTx.target == "" {
 				sendBroadCast(server, messageTx)
+			} else if strings.HasPrefix(messageTx.target, "#") {
+				sendToChannel(server, messageTx)
 			} else {
 				sendPrivMsg(server, messageTx)
 			}
+
 		case shutDown := <-server.shutDown:
 			if shutDown == true {
 				removeAllClients(server)
 				return
 			}
+
 		case req := <-server.nickCheck:
 			req.resultCh <- checkNickName(server, req)
+
+		case joinReq := <-server.joinCh:
+			handleJoinChannel(server, joinReq)
 		}
 	}
 }

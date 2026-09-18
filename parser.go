@@ -21,12 +21,16 @@ func parseCommand(text string) Command {
 
 	payload := ""
 	target := ""
+	
 	if len(parts) > 1 {
 		payload = parts[1]
 		parts = strings.SplitN(payload, " ", 2)
 		if len(parts) > 1 {
 			target = parts[0]
 			payload = parts[1]
+		} else{
+			target = parts[0]
+			payload = ""
 		}
 	}
 

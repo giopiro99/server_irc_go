@@ -1,11 +1,12 @@
 package main
 
+import _ "net/http/pprof"
+
 import (
 	"errors"
 	"log"
 	"net"
 	"os"
-
 	"github.com/joho/godotenv"
 )
 
@@ -20,18 +21,30 @@ type NickRequest struct {
 	resultCh chan bool
 }
 
+type JoinReq struct {
+	client   *Client
+	roomName string
+}
+
+type Room struct {
+	name    string
+	clients map[*Client]bool
+}
+
 type Server struct {
 	ipAddress string
 	port      string
 	password  string
 
+	clients map[*Client]bool
+	rooms   map[string]*Room
+
+	joinCh       chan *JoinReq
 	messageCh    chan *Message
-	clients      map[*Client]bool
 	registered   chan *Client
 	unregistered chan *Client
-
-	shutDown  chan bool
-	nickCheck chan NickRequest
+	shutDown     chan bool
+	nickCheck    chan NickRequest
 }
 
 func newServer() (*Server, error) {
@@ -59,6 +72,9 @@ func newServer() (*Server, error) {
 	server.unregistered = make(chan *Client)
 	server.shutDown = make(chan bool)
 	server.nickCheck = make(chan NickRequest)
+	server.rooms = make(map[string]*Room)
+	server.joinCh = make(chan *JoinReq)
+
 	return server, nil
 }
 
