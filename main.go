@@ -1,12 +1,13 @@
 package main
 
-import _ "net/http/pprof"
-
 import (
 	"errors"
 	"log"
 	"net"
+	"net/http"
+	_ "net/http/pprof"
 	"os"
+
 	"github.com/joho/godotenv"
 )
 
@@ -26,6 +27,11 @@ type JoinReq struct {
 	roomName string
 }
 
+type LeaveReq struct {
+	client   *Client
+	roomName string
+}
+
 type Room struct {
 	name    string
 	clients map[*Client]bool
@@ -40,6 +46,7 @@ type Server struct {
 	rooms   map[string]*Room
 
 	joinCh       chan *JoinReq
+	leaveCh      chan *LeaveReq
 	messageCh    chan *Message
 	registered   chan *Client
 	unregistered chan *Client
@@ -74,6 +81,7 @@ func newServer() (*Server, error) {
 	server.nickCheck = make(chan NickRequest)
 	server.rooms = make(map[string]*Room)
 	server.joinCh = make(chan *JoinReq)
+	server.leaveCh = make(chan *LeaveReq)
 
 	return server, nil
 }
@@ -103,6 +111,11 @@ func main() {
 
 	go shutdownSignal(server, listener)
 	go runBroadCaster(server)
+
+	go func() {
+		log.Println("Server pprof in ascolto su http://localhost:6060/debug/pprof/")
+		log.Println(http.ListenAndServe("localhost:6060", nil))
+	}()
 
 	for {
 		conn, err := listener.Accept()

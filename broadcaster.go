@@ -32,7 +32,6 @@ func sendPrivMsg(server *Server, messageTx *Message) {
 func sendToChannel(server *Server, messageTx *Message) {
 
 	channelName := strings.TrimPrefix(messageTx.target, "#")
-	//println("messaggio da inviare al canale " + channelName + "\n" + "testo: " + messageTx.message)
 
 	channel := server.rooms[channelName]
 	if channel == nil {
@@ -73,7 +72,7 @@ func removeClientFromChannels(client *Client, server *Server) {
 
 		if len(channel.clients) == 0 {
 			delete(server.rooms, channelName)
-			println("Channel " + channelName + " is empty, eliminated...")
+			log.Println("Channel " + channelName + " is empty, eliminated...")
 		}
 	}
 }
@@ -118,7 +117,7 @@ func createChannel(server *Server, joinReq *JoinReq) {
 	}
 	newRoom.clients[joinReq.client] = true
 	server.rooms[joinReq.roomName] = newRoom
-	println("New room created, named: ", joinReq.roomName)
+	log.Println("New room created, named: ", joinReq.roomName)
 	welcomeMessage := "You are the first member of this channel named " + newRoom.name + "!\nWelcome " + joinReq.client.nickName + "\n"
 	joinReq.client.conn.Write([]byte(welcomeMessage))
 }
@@ -126,7 +125,6 @@ func createChannel(server *Server, joinReq *JoinReq) {
 func handleJoinChannel(server *Server, joinReq *JoinReq) {
 
 	trimmedName := strings.TrimSpace(joinReq.roomName)
-	println(joinReq.roomName)
 	client := joinReq.client
 
 	if trimmedName == "" || utf8.RuneCountInString(trimmedName) > 10 {
@@ -151,8 +149,45 @@ func handleJoinChannel(server *Server, joinReq *JoinReq) {
 	sendToChannel(server, &Message{
 		sender:  client,
 		target:  channel.name,
-		message: "is joined\n",
+		message: "is joined",
 	})
+}
+
+func handleLeaveChannel(server *Server, leaveReq *LeaveReq) {
+	trimmedName := strings.TrimPrefix(leaveReq.roomName, "#")
+	trimmedName = strings.TrimSpace(trimmedName)
+	client := leaveReq.client
+
+	if trimmedName == "" || utf8.RuneCountInString(trimmedName) > 10 {
+		client.conn.Write([]byte("Channel not found\n"))
+		return
+	}
+
+	channel := server.rooms[trimmedName]
+	if channel == nil {
+		client.conn.Write([]byte("Channel not found\n"))
+		return
+	}
+
+	if !channel.clients[client] {
+		client.conn.Write([]byte("You are not in this channel!\n"))
+		return
+	}
+
+	sendToChannel(server, &Message{
+		sender:  client,
+		target:  channel.name,
+		message: "left the channel",
+	})
+	client.conn.Write([]byte("you left the channel: " + channel.name + "\n"))
+
+	delete(channel.clients, client)
+
+	if len(channel.clients) == 0 {
+		delete(server.rooms, channel.name)
+		log.Println("Channel " + channel.name + " is empty, eliminated...")
+	}
+
 }
 
 func runBroadCaster(server *Server) {
@@ -188,6 +223,9 @@ func runBroadCaster(server *Server) {
 
 		case joinReq := <-server.joinCh:
 			handleJoinChannel(server, joinReq)
+
+		case leaveReq := <-server.leaveCh:
+			handleLeaveChannel(server, leaveReq)
 		}
 	}
 }

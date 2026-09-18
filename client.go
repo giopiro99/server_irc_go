@@ -77,7 +77,7 @@ func doAuthentication(client *Client) (bool, error) {
 		attempts++
 	}
 
-	if passwordOk == false {
+	if !passwordOk {
 		client.conn.Write([]byte("Invalid limit password reached, disconnecting...\n"))
 		return false, nil
 	}
@@ -85,15 +85,14 @@ func doAuthentication(client *Client) (bool, error) {
 	return true, nil
 }
 
-func clientRoutine(client *Client, server *Server) {
+func clientRoutine(client *Client, server *Server) bool {
 	text, err := client.reader.ReadString('\n')
 	if err != nil {
 		server.unregistered <- client
-		return
+		return false
 	}
 	text = strings.TrimSpace(text)
 	command := parseCommand(text)
-	//println("commande name = " + command.name + "\n" + "target = " + command.target + "\n" + "payload = " + command.payload + "\n")
 	if text != "" {
 		switch command.name {
 		case "BROADCAST":
@@ -104,7 +103,7 @@ func clientRoutine(client *Client, server *Server) {
 			}
 		case "QUIT":
 			server.unregistered <- client
-			return
+			return false
 		case "PRIVMSG":
 			server.messageCh <- &Message{
 				sender:  client,
@@ -116,8 +115,14 @@ func clientRoutine(client *Client, server *Server) {
 				roomName: command.target,
 				client:   client,
 			}
+		case "LEAVE":
+			server.leaveCh <- &LeaveReq{
+				roomName: command.target,
+				client:   client,
+			}
 		}
 	}
+	return true
 }
 
 func handleConnection(conn net.Conn, server *Server) {
@@ -147,7 +152,9 @@ func handleConnection(conn net.Conn, server *Server) {
 	server.registered <- client
 
 	for {
-		clientRoutine(client, server)
+		if !clientRoutine(client, server) {
+			return
+		}
 	}
 
 }

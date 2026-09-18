@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"log"
 	"net"
 	"os/signal"
 	"syscall"
@@ -13,7 +14,7 @@ func shutdownSignal(server *Server, listener net.Listener) {
 	defer stop()
 
 	<-ctx.Done()
-	println("Shutdown signal reached, disconnecting all clients\n")
+	log.Println("Shutdown signal reached, disconnecting all clients")
 	server.shutDown <- true
 
 	listener.Close()
