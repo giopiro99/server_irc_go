@@ -11,6 +11,7 @@ import (
 
 type Message struct {
 	sender  *Client
+	target  string
 	message string
 }
 
@@ -65,13 +66,13 @@ func main() {
 
 	err := godotenv.Load()
 	if err != nil {
-		log.Println("No file .env, exit")
+		log.Fatalf("No file .env, exit")
 		return
 	}
 
 	server, err := newServer()
 	if err != nil {
-		log.Fatal("Impossible to start server: ", err)
+		log.Fatalf("Impossible to start server: %v", err)
 	}
 
 	log.Println("Configuration applyed, server starting on port: ", server.port)

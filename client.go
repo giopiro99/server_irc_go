@@ -118,12 +118,27 @@ func handleConnection(conn net.Conn, server *Server) {
 			server.unregistered <- client
 			return
 		}
-
 		text = strings.TrimSpace(text)
+
+		command := parseCommand(text)
 		if text != "" {
-			server.messageCh <- &Message{
-				sender:  client,
-				message: text,
+			switch command.name {
+			case "BROADCAST":
+				server.messageCh <- &Message{
+					sender:  client,
+					target:  "",
+					message: command.payload,
+				}
+			case "QUIT":
+				server.unregistered <- client
+				return
+
+			case "PRIVMSG":
+				server.messageCh <- &Message{
+					sender: client,
+					target: command.target,
+					message: command.payload,
+				}
 			}
 		}
 	}
